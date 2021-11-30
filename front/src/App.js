@@ -7,12 +7,16 @@ function App() {
   const [state, setState] = useState();
 
   useEffect(() => {
-    setSocket(socketIoClient("http://localhost:4000"));
+    if (!socket) {
+      setSocket(socketIoClient("http://localhost:4000"));
+      return;
+    }
 
+    console.log(socket);
     socket.on("hello", (socketResponse) => {
       console.log("socketResponse", socketResponse);
     });
-  }, []);
+  }, [socket]);
 
   const onClickButton = () => {
     socket.emit("chat", "Chat chat!");
