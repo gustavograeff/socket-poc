@@ -1,5 +1,4 @@
 import "./App.css";
-import socketIoClient from "socket.io-client";
 import { useEffect, useState } from "react";
 
 function App() {
@@ -8,18 +7,17 @@ function App() {
 
   useEffect(() => {
     if (!socket) {
-      setSocket(socketIoClient("http://localhost:4000"));
+      setSocket(new WebSocket("ws://localhost:4000"));
       return;
     }
 
-    console.log(socket);
-    socket.on("hello", (socketResponse) => {
-      console.log("socketResponse", socketResponse);
-    });
+    socket.onmessage = (socketMessageEvent) => {
+      console.log("socket message", socketMessageEvent);
+    };
   }, [socket]);
 
   const onClickButton = () => {
-    socket.emit("chat", "Chat chat!");
+    socket.send("Hello server, here is client talking!");
   };
 
   return (
