@@ -4,15 +4,13 @@
 // https://medium.com/hackernoon/implementing-a-websocket-server-with-node-js-d9b78ec5ffa8
 
 const http = require("http");
+const crypto = require("crypto");
 const server = http.createServer((req, res) => {
   if (req.method === "GET") {
     res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
     res.send("Hello!");
   }
 });
-const crypto = require("crypto");
-// const { Buffer } = require("buffer");
-// const buff5 = Buffer.alloc(5, 'Hello World!', 'utf-8');
 
 const WebSocketOperationCodeEnum = {
   FINAL: 0x80, // decimal 128
@@ -27,23 +25,18 @@ const WebSocketBytesOffset = {
   DATA_CLIENT: 6,
 };
 
-const WebSocketShiftMaskBitsAmount = {
-  0: 24,
-  1: 16,
-  2: 8,
-  3: 0,
+const BitWiseComparatorAmount = {
+  FOUR: 0xf, // decimal 15 - binary 1111
+  SEVEN: 0x7f, // decimal 127 - binary 1111111
 };
 
-const bitWiseComparator4Bits = 0xf; // decimal 15 - binary 1111
-const bitWiseComparator7Bits = 0x7f; // decimal 127 - binary 1111111
-
-const sendTextFrame = (socket, text) => {
+const sendClientDataFrame = (socket, data) => {
   // Check doc:
   // https://www.rfc-editor.org/rfc/rfc6455#section-11.8
   // https://www.rfc-editor.org/rfc/rfc6455#section-5.2
   // https://www.rfc-editor.org/rfc/rfc6455#section-5.6
 
-  const payload = Buffer.from(text, "utf-8");
+  const payload = Buffer.from(data, "utf-8");
 
   // Merge all buffers resulting in some hexadecimal values with the entire data
   const frame = Buffer.concat([
@@ -58,7 +51,7 @@ const sendTextFrame = (socket, text) => {
   socket.write(frame, "utf-8");
 };
 
-const genAcceptKey = (req) => {
+const getValidHandShakeKey = (req) => {
   // Check doc:
   // https://www.rfc-editor.org/rfc/rfc6455#page-7
   // https://www.rfc-editor.org/rfc/rfc6455#page-24
@@ -74,8 +67,8 @@ const genAcceptKey = (req) => {
   return sha1.digest("base64");
 };
 
-const acceptUpgrade = (req, socket) => {
-  const acceptKey = genAcceptKey(req);
+const writeSocketValidUpgrade = (req, socket) => {
+  const acceptKey = getValidHandShakeKey(req);
 
   // Response based on doc: https://www.rfc-editor.org/rfc/rfc6455#section-1.2
   const responseHeaders = [
@@ -90,59 +83,64 @@ const acceptUpgrade = (req, socket) => {
   socket.write(responseHeaders);
 };
 
-const handleClientWebSocketData = (clientData) => {
-  const webSocketClientOperationByte = clientData.readUInt8(
+const handleClientWebSocketData = (clientBuffer) => {
+  const webSocketClientOperationByte = clientBuffer.readUInt8(
     WebSocketBytesOffset.OPERATION_CODE
   );
 
   // & is used to ignore every bit which doesn't correspond to opcode
   // https://www.rfc-editor.org/rfc/rfc6455#section-5.2
-  const opCode = webSocketClientOperationByte & bitWiseComparator4Bits;
+  const opCode = webSocketClientOperationByte & BitWiseComparatorAmount.FOUR;
 
   if (opCode === WebSocketOperationCodeEnum.CLOSE) return null; // This null signify it's a connection termination frame
 
   if (opCode !== WebSocketOperationCodeEnum.STRING) return; // We just wanna string for now
 
-  const webSocketPayloadLengthByte = clientData.readUInt8(
+  const webSocketPayloadLengthByte = clientBuffer.readUInt8(
     WebSocketBytesOffset.PAYLOAD_LENGTH
   );
 
   // & is used to ignore every bit which doesn't correspond to payload length
-  const payloadLength = webSocketPayloadLengthByte & bitWiseComparator7Bits;
+  const framePayloadLength =
+    webSocketPayloadLengthByte & BitWiseComparatorAmount.SEVEN;
 
   const responseBuffer = new Buffer.alloc(
-    clientData.length - WebSocketBytesOffset.DATA_CLIENT
+    clientBuffer.length - WebSocketBytesOffset.DATA_CLIENT
   );
 
-  let webSocketFrameByteIndex = WebSocketBytesOffset.DATA_CLIENT;
+  let frameByteIndex = WebSocketBytesOffset.DATA_CLIENT;
 
   // This loop is based on doc: https://www.rfc-editor.org/rfc/rfc6455#section-5.3
-  for (let i = 0, j = 0; i < payloadLength; ++i, j = i % 4) {
+  for (let i = 0, j = 0; i < framePayloadLength; ++i, j = i % 4) {
     // Browser always mask the frame
     // "The masking key is a 32-bit value chosen at random by the client"
     // https://www.rfc-editor.org/rfc/rfc6455#page-30.
     // https://www.rfc-editor.org/rfc/rfc6455#section-5.3
-    const mask = clientData[WebSocketBytesOffset.MASK_KEY_CLIENT + j];
+    const frameMask = clientBuffer[WebSocketBytesOffset.MASK_KEY_CLIENT + j];
 
-    const source = clientData.readUInt8(webSocketFrameByteIndex); // receive hexadecimal, return decimal
+    const source = clientBuffer.readUInt8(frameByteIndex); // receive hexadecimal, return decimal
 
-    responseBuffer.writeUInt8(source ^ mask, i);
+    responseBuffer.writeUInt8(source ^ frameMask, i);
 
-    webSocketFrameByteIndex++;
+    frameByteIndex++;
   }
 
-  console.log("Client websocket frame =", responseBuffer.toString("utf-8"));
+  console.log(
+    `Client websocket frame value ->${responseBuffer.toString("utf-8")}<-`
+  );
 };
 
 const runWebSocket = () => {
   server.on("upgrade", (req, socket, head) => {
-    acceptUpgrade(req, socket);
-    sendTextFrame(socket, "Hey client, this is server talking!");
+    writeSocketValidUpgrade(req, socket);
+    sendClientDataFrame(socket, "Hey client, this is server talking!");
 
     socket.on("data", handleClientWebSocketData);
   });
 
-  server.listen(4000);
+  const port = 4000;
+  server.listen(port);
+  console.log(`Server running on port ${port}`);
 
   return server;
 };
