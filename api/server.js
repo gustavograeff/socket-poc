@@ -37,7 +37,7 @@ const WebSocketShiftMaskBitsAmount = {
 const bitWiseComparator4Bits = 0xf; // decimal 15 - binary 1111
 const bitWiseComparator7Bits = 0x7f; // decimal 127 - binary 1111111
 
-const sendTextFrame = function (socket, text) {
+const sendTextFrame = (socket, text) => {
   // Check doc:
   // https://www.rfc-editor.org/rfc/rfc6455#section-11.8
   // https://www.rfc-editor.org/rfc/rfc6455#section-5.2
