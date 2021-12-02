@@ -118,14 +118,6 @@ const handleClientWebSocketData = (clientData) => {
   // & is used to ignore every bit which doesn't correspond to payload length
   const payloadLength = webSocketPayloadLengthByte & bitWiseComparator7Bits;
 
-  // Browser always mask the frame
-  // "The masking key is a 32-bit value chosen at random by the client"
-  // https://www.rfc-editor.org/rfc/rfc6455#page-30.
-  // https://www.rfc-editor.org/rfc/rfc6455#section-5.3
-  const clientWebSocketFrameMask = clientData.readUInt32BE(
-    WebSocketBytesOffset.MASK_KEY_CLIENT
-  );
-
   const responseBuffer = new Buffer.alloc(
     clientData.length - WebSocketBytesOffset.DATA_CLIENT
   );
@@ -134,9 +126,11 @@ const handleClientWebSocketData = (clientData) => {
 
   // This loop is based on doc: https://www.rfc-editor.org/rfc/rfc6455#section-5.3
   for (let i = 0, j = 0; i < payloadLength; ++i, j = i % 4) {
-    const mask =
-      (clientWebSocketFrameMask >> WebSocketShiftMaskBitsAmount[j]) &
-      bitWiseComparator8Bits; // & is used to ignore every bit which doesn't correspond to mask
+    // Browser always mask the frame
+    // "The masking key is a 32-bit value chosen at random by the client"
+    // https://www.rfc-editor.org/rfc/rfc6455#page-30.
+    // https://www.rfc-editor.org/rfc/rfc6455#section-5.3
+    const mask = clientData[WebSocketBytesOffset.MASK_KEY_CLIENT + j];
 
     const source = clientData.readUInt8(webSocketFrameByteIndex); // receive hexadecimal, return decimal
 
