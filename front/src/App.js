@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 
 function App() {
   const [socket, setSocket] = useState();
-  const [state, setState] = useState();
 
   useEffect(() => {
     if (!socket) {
@@ -17,7 +16,7 @@ function App() {
   }, [socket]);
 
   const onClickButton = () => {
-    socket.send("Hello server, here is client talking!");
+    socket.send("Hello server, this is client talking!");
   };
 
   return (

@@ -70,10 +70,11 @@ const genAcceptKey = (req) => {
   // Check doc:
   // https://www.rfc-editor.org/rfc/rfc6455#page-7
   // https://www.rfc-editor.org/rfc/rfc6455#page-24
-  // We need this sha1 hash to ensure the socket handshake
 
   const GUID_FROM_DOC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
   const webSocketHeader = req.headers["sec-websocket-key"];
+
+  // We need this sha1 hash to ensure the socket handshake
   const sha1 = crypto.createHash("sha1");
 
   sha1.update(webSocketHeader + GUID_FROM_DOC);
@@ -93,7 +94,7 @@ const acceptUpgrade = (req, socket) => {
     "\r\n",
   ].join("\r\n");
 
-  // Set correct headers to respond client
+  // Send correct headers to respond client
   socket.write(responseHeaders);
 };
 
@@ -102,9 +103,9 @@ const handleClientWebSocketData = (clientData) => {
     WebSocketBytesOffset.OPERATION_CODE
   );
 
-  // Based on doc, this bitwise AND consider just bits responsible for the opCode and tell us which one it is
+  // & is used to ignore every bit which doesn't correspond to opcode
   // https://www.rfc-editor.org/rfc/rfc6455#section-5.2
-  const opCode = webSocketClientOperationByte & bitWiseComparator4Bits; // & is used to ignore every bit which doesn't correspond to opcode
+  const opCode = webSocketClientOperationByte & bitWiseComparator4Bits;
 
   if (opCode === WebSocketOperationCodeEnum.CLOSE) return null; // This null signify it's a connection termination frame
 
@@ -113,9 +114,13 @@ const handleClientWebSocketData = (clientData) => {
   const webSocketPayloadLengthByte = clientData.readUInt8(
     WebSocketBytesOffset.PAYLOAD_LENGTH
   );
-  const payloadLength = webSocketPayloadLengthByte & bitWiseComparator7Bits; // & is used to ignore every bit which doesn't correspond to payload length
 
+  // & is used to ignore every bit which doesn't correspond to payload length
+  const payloadLength = webSocketPayloadLengthByte & bitWiseComparator7Bits;
+
+  // Browser always mask the frame
   // "The masking key is a 32-bit value chosen at random by the client"
+  // https://www.rfc-editor.org/rfc/rfc6455#page-30.
   // https://www.rfc-editor.org/rfc/rfc6455#section-5.3
   const clientWebSocketFrameMask = clientData.readUInt32BE(
     WebSocketBytesOffset.MASK_KEY_CLIENT
@@ -125,34 +130,28 @@ const handleClientWebSocketData = (clientData) => {
     clientData.length - WebSocketBytesOffset.DATA_CLIENT
   );
 
-  // Commented because it's not necessary this validation, browser always mask the frame
-  // https://www.rfc-editor.org/rfc/rfc6455#page-30.
-  // const webSocketMaskBit = webSocketPayloadLengthByte >> sevenBits;
-  // const isMasked = Boolean(webSocketMaskBit);
+  let webSocketFrameByteIndex = WebSocketBytesOffset.DATA_CLIENT;
 
-  let currentOffset = WebSocketBytesOffset.DATA_CLIENT;
   // This loop is based on doc: https://www.rfc-editor.org/rfc/rfc6455#section-5.3
-  // 1 octet is 1 byte, 8 bits, 2 Hexadecimal -> e.g. ff
   for (let i = 0, j = 0; i < payloadLength; ++i, j = i % 4) {
     const mask =
       (clientWebSocketFrameMask >> WebSocketShiftMaskBitsAmount[j]) &
       bitWiseComparator8Bits; // & is used to ignore every bit which doesn't correspond to mask
 
-    const source = clientData.readUInt8(currentOffset); // receive hexadecimal, return decimal
+    const source = clientData.readUInt8(webSocketFrameByteIndex); // receive hexadecimal, return decimal
 
     responseBuffer.writeUInt8(source ^ mask, i);
 
-    currentOffset++;
+    webSocketFrameByteIndex++;
   }
 
-  console.log("Buffer parse result =", responseBuffer.toString("utf-8"));
+  console.log("Client websocket frame =", responseBuffer.toString("utf-8"));
 };
 
-// Very Simple Web Socket server
 const runWebSocket = () => {
   server.on("upgrade", (req, socket, head) => {
     acceptUpgrade(req, socket);
-    sendTextFrame(socket, "Testç");
+    sendTextFrame(socket, "Hey client, this is server talking!");
 
     socket.on("data", handleClientWebSocketData);
   });
@@ -163,5 +162,3 @@ const runWebSocket = () => {
 };
 
 runWebSocket();
-
-// console.log("aaaaaaa", Buffer.from("ç", "utf-8"));
