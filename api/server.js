@@ -3,10 +3,13 @@
 // https://dustinpfister.github.io/2019/11/20/nodejs-websocket/
 // https://medium.com/hackernoon/implementing-a-websocket-server-with-node-js-d9b78ec5ffa8
 
-const express = require("express");
-const app = express();
 const http = require("http");
-const server = http.createServer(app);
+const server = http.createServer((req, res) => {
+  if (req.method === "GET") {
+    res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+    res.send("Hello!");
+  }
+});
 const crypto = require("crypto");
 // const { Buffer } = require("buffer");
 // const buff5 = Buffer.alloc(5, 'Hello World!', 'utf-8');
@@ -33,17 +36,6 @@ const WebSocketShiftMaskBitsAmount = {
 
 const bitWiseComparator4Bits = 0xf; // decimal 15 - binary 1111
 const bitWiseComparator7Bits = 0x7f; // decimal 127 - binary 1111111
-const bitWiseComparator8Bits = 0xff; // decimal 128 - binary 11111111
-
-app.use(function (req, res, next) {
-  res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
-
-  next();
-});
-
-app.get("/", (req, res) => {
-  res.send("Hello!");
-});
 
 const sendTextFrame = function (socket, text) {
   // Check doc:
